@@ -563,8 +563,8 @@ footer{margin-top:3rem;text-align:center;font-size:0.63rem;color:var(--ink3);fon
 <script>
 const{createClient}=supabase;
 const sb=createClient(
-  'https://nuilhgfrzdkleetenkid.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51aWxoZ2ZyemRrbGVldGVua2lkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjA1NDYsImV4cCI6MjA5MjE5NjU0Nn0.AWR9sD-HBWZ0xHYpuxL24R6PxsdQztIgqCnZOBviCEk'
+  'https://sjjgzuaeqcbtvrnmquex.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqamd6dWFlcWNidHZybm1xdWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMDYzNjIsImV4cCI6MjA4ODc4MjM2Mn0.RRRjWxamVkzTZbEn6FwL3-6bvhFw6njXjnk9Bsu5TiI'
 );
 
 let currentUser=null,miscEntries=[],savingsGoals=[],assets=[],debts=[];
@@ -651,7 +651,7 @@ function updateIncomeDisplays(){
 }
 
 // MISC
-async function loadMiscEntries(){const{data}=await sb.from('expenses').select('*').eq('user_id',currentUser.id).eq('type','expense').order('date',{ascending:false});miscEntries=data||[];}
+async function loadMiscEntries(){const{data}=await sb.from('expenses').select('*').eq('user_id',currentUser.id).eq('type','expense').neq('category','salary').order('date',{ascending:false});miscEntries=data||[];}
 function miscForMonth(m){return miscEntries.filter(e=>e.date&&e.date.startsWith(m));}
 function miscTotal(m){return miscForMonth(m).reduce((a,e)=>a+parseFloat(e.amount||0),0);}
 async function addMisc(){
@@ -741,6 +741,16 @@ async function confirmEditDebt(){
   if(error){alert('Error: '+error.message);return;}
   debts[debts.findIndex(d=>d.id===editDebtId)]=data;closeModal('edit-debt-modal');renderDebt();
 }
+async function payMonthlyDebt(id){
+  const d=debts.find(x=>x.id===id);if(!d)return;
+  const mp=parseFloat(d.monthly_payment||0);
+  if(mp<=0){alert('No monthly payment set for this debt.');return;}
+  const newBal=Math.max(0,parseFloat(d.remaining_amount)-mp);
+  if(!confirm(`Mark payment of ${fmt(mp)} for "${d.name}"?\nNew balance: ${fmt(newBal)}`))return;
+  const{data,error}=await sb.from('debts').update({remaining_amount:newBal}).eq('id',id).select().single();
+  if(error){alert('Error: '+error.message);return;}
+  debts[debts.findIndex(x=>x.id===id)]=data;renderDebt();
+}
 async function deleteDebt(id){if(!confirm('Delete this debt?'))return;await sb.from('debts').delete().eq('id',id);debts=debts.filter(d=>d.id!==id);renderDebt();}
 
 // MODAL
@@ -755,7 +765,8 @@ function switchTab(name,btn){
 }
 
 // RENDER OVERVIEW
-function renderMonth(){
+async function renderMonth(){await loadMiscEntries();
+function renderMonthSync(){
   const m=currentMonth(),mt=miscTotal(m);
   const base=CATS.reduce((a,c)=>a+c.amt,0),total=base+mt;
   const fixed=FIXED.housing+FIXED.vehicle+FIXED.kids+FIXED.utility+FIXED.other;
@@ -799,6 +810,8 @@ function renderMonth(){
     });
   }
   renderMiscLog();updateIncomeDisplays();
+}
+renderMonthSync();
 }
 
 function renderMiscLog(){
@@ -930,7 +943,7 @@ function renderDebt(){
       </div>
       <div class="debt-note" style="margin-top:0.4rem;">${intRate>0?`⚠️ Interest: ${intRate}% p.a.`:'✅ 0% Interest'}</div>
       ${d.end_date?`<div class="debt-note">📅 End: ${d.end_date}</div>`:''}
-      <div class="debt-actions"><button class="btn-sm" onclick="openEditDebt('${d.id}')">✏️ Update Balance</button><button class="btn-sm danger" onclick="deleteDebt('${d.id}')">Delete</button></div>`;
+      <div class="debt-actions"><button class="btn-sm" onclick="payMonthlyDebt('${d.id}')">✅ Pay This Month</button><button class="btn-sm" onclick="openEditDebt('${d.id}')">✏️ Edit</button><button class="btn-sm danger" onclick="deleteDebt('${d.id}')">Delete</button></div>`;
     grid.appendChild(card);
   });
 }

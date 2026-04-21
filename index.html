@@ -417,11 +417,17 @@ async function deleteExtra(id){
 }
 
 // RECURRING
+function populateDebtDropdown(){
+  const sel=document.getElementById('rec-debt');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— None —</option>';
+  debts.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.name+' ('+fmt(d.remaining_amount)+' rem.)';sel.appendChild(o);});
+  if(cur)sel.value=cur;
+}
 async function loadRecurrings(){
   const{data}=await sb.from('recurring_expenses').select('*').eq('user_id',uid()).eq('active',true).order('category');
   recurrings=data||[];
-  const sel=document.getElementById('rec-debt');sel.innerHTML='<option value="">— None —</option>';
-  debts.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.name;sel.appendChild(o);});
+  populateDebtDropdown();
 }
 async function addRecurring(){
   const name=document.getElementById('rec-name').value.trim(),category=document.getElementById('rec-cat').value;
@@ -538,8 +544,7 @@ async function addDebt(){
   const{data,error}=await sb.from('debts').insert({user_id:uid(),name,category,total_amount,remaining_amount,monthly_payment,interest_rate,end_date}).select().single();
   if(error){alert(error.message);return;}
   debts.push(data);['dt-name','dt-orig','dt-rem-i','dt-mo-i','dt-rate','dt-end'].forEach(id=>document.getElementById(id).value='');
-  // refresh debt dropdown in recurring
-  const sel=document.getElementById('rec-debt');const o=document.createElement('option');o.value=data.id;o.textContent=data.name;sel.appendChild(o);
+  populateDebtDropdown();
   renderDebt();renderWealth();
 }
 function openEditDebt(id){editDebtId=id;const d=debts.find(x=>x.id===id);document.getElementById('ed-rem').value=d.remaining_amount;document.getElementById('ed-mo').value=d.monthly_payment;openM('m-edit-debt');}
@@ -549,7 +554,7 @@ async function confirmEditDebt(){
   if(error){alert(error.message);return;}
   debts[debts.findIndex(d=>d.id===editDebtId)]=data;closeM('m-edit-debt');renderDebt();renderWealth();
 }
-async function deleteDebt(id){if(!confirm('Delete?'))return;await sb.from('debts').delete().eq('id',id);debts=debts.filter(d=>d.id!==id);renderDebt();renderWealth();}
+async function deleteDebt(id){if(!confirm('Delete?'))return;await sb.from('debts').delete().eq('id',id);debts=debts.filter(d=>d.id!==id);populateDebtDropdown();renderDebt();renderWealth();}
 
 // ══ RENDER ══
 
@@ -706,7 +711,7 @@ function sw(name,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('pane-'+name).classList.add('active');
   if(btn)btn.classList.add('active');
-  if(name==='recurring')renderRecurring();
+  if(name==='recurring'){populateDebtDropdown();renderRecurring();}
   if(name==='savings')renderGoals();
   if(name==='wealth')renderWealth();
 }

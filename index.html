@@ -322,11 +322,18 @@ input,select,button{font-family:'Plus Jakarta Sans',sans-serif;}
 
   <!-- TIPS -->
   <div class="pane" id="pane-tips">
-    <div class="tip"><strong>Debt Service Ratio (DSR)</strong>Jumlah ansuran bulanan ÷ pendapatan kasar. Pastikan di bawah 60%.</div>
-    <div class="tip"><strong>Debt Avalanche</strong>Bayar minimum semua hutang, extra payment pada hutang berbunga tertinggi dahulu.</div>
-    <div class="tip"><strong>Emergency Fund</strong>Simpan 3–6 bulan perbelanjaan tetap dalam savings mudah diakses.</div>
-    <div class="tip"><strong>Pelaburan (Malaysia)</strong>ASB/ASN · EPF Voluntary · Amanah Saham · REITs · Unit Trust.</div>
-    <div class="tip"><strong>Hartanah Kedua</strong>Pastikan sewa ≥ ansuran + maintenance + cukai. Kira ROI sebelum beli.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+      <div style="font-size:0.68rem;color:var(--ink3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;">AI Financial Advisor · Personalised to your data</div>
+      <button class="btn btn-dk" id="tips-btn" onclick="generateTips()">✨ Generate Tips</button>
+    </div>
+    <div id="tips-loading" style="display:none;text-align:center;padding:2rem;color:var(--ink3);font-size:0.8rem;font-family:'JetBrains Mono',monospace;">Analysing your finances...</div>
+    <div id="tips-output"></div>
+    <div id="tips-static" style="margin-top:0.5rem;">
+      <div class="tip"><strong>DSR Rule</strong>Jumlah ansuran bulanan ÷ pendapatan kasar. Pastikan di bawah 60%.</div>
+      <div class="tip"><strong>Debt Avalanche</strong>Bayar minimum semua hutang, extra payment pada hutang berbunga tertinggi dahulu.</div>
+      <div class="tip"><strong>Emergency Fund</strong>Simpan 3–6 bulan perbelanjaan tetap dalam savings mudah diakses.</div>
+      <div class="tip"><strong>Pelaburan Malaysia</strong>ASB/ASN · EPF Voluntary · Amanah Saham · REITs · Unit Trust.</div>
+    </div>
   </div>
 </div>
 
@@ -383,6 +390,7 @@ async function startApp(){
 async function loadAll(){
   await Promise.all([loadSalary(),loadDebts(),loadAssets(),loadGoals(),loadRecurrings()]);
   await loadMonthData();
+  renderDebt();renderWealth();
 }
 async function onMonthChange(){await loadMonthData();}
 
@@ -611,8 +619,7 @@ function renderOverview(){
         <span>${r.name}</span>
         <span class="etag">${isPaid?'Paid':r.debt_id?'Linked Debt':'Recurring'}</span>
         <span class="eamt">${fmt(r.amount)}</span>
-        ${isNext?'<span></span>':isPaid?`<span class="paid-badge">&#10003; Done</span>`:`<button class="pay-btn" onclick="markPaid('${r.id}')">Mark Paid</button>`}
-        ${isNext?'':`<button class="del-btn" onclick="deleteMonthlyExp('${r.id}')">&#10005;</button>`}
+        <div style="display:flex;align-items:center;gap:0.4rem">${isNext?'':isPaid?`<span class="paid-badge">&#10003; Done</span>`:`<button class="pay-btn" onclick="markPaid('${r.id}')">Mark Paid</button>`}${isNext?'':`<button class="del-btn" onclick="deleteMonthlyExp('${r.id}')">&#10005;</button>`}</div>
       </div>`;
     }).join('')}</div>`;
   });
@@ -715,6 +722,74 @@ function renderDebt(){
   }).join('');
 }
 
+// AI TIPS
+async function generateTips(){
+  const btn=document.getElementById('tips-btn');
+  const loading=document.getElementById('tips-loading');
+  const output=document.getElementById('tips-output');
+  const staticTips=document.getElementById('tips-static');
+  btn.disabled=true;btn.textContent='⏳ Thinking...';
+  loading.style.display='block';output.innerHTML='';staticTips.style.display='none';
+
+  const totalIncome=salary.husband+salary.wife;
+  const totalDebtRemaining=debts.reduce((a,d)=>a+parseFloat(d.remaining_amount||0),0);
+  const totalMonthlyDebt=debts.reduce((a,d)=>a+parseFloat(d.monthly_payment||0),0);
+  const totalAssets=assets.reduce((a,x)=>a+parseFloat(x.value||0),0);
+  const totalSaved=goals.reduce((a,g)=>a+parseFloat(g.current_amount||0),0);
+  const totalTarget=goals.reduce((a,g)=>a+parseFloat(g.target_amount||0),0);
+  const totalRecurring=recurrings.reduce((a,r)=>a+parseFloat(r.amount||0),0);
+  const dsr=totalIncome>0?(totalMonthlyDebt/totalIncome*100).toFixed(1):0;
+  const netWorth=totalAssets-totalDebtRemaining;
+
+  const debtList=debts.map(d=>`- ${d.name}: RM${d.remaining_amount} remaining, RM${d.monthly_payment}/mo, ${d.interest_rate||0}% interest`).join('\n');
+  const assetList=assets.map(a=>`- ${a.name} (${a.category}): RM${a.value}`).join('\n');
+  const goalList=goals.map(g=>`- ${g.name}: saved RM${g.current_amount} of RM${g.target_amount} target`).join('\n');
+  const recurList=recurrings.map(r=>`- ${r.name} (${r.category}): RM${r.amount}/mo`).join('\n');
+
+  const prompt=`You are a Malaysian personal finance advisor. Analyse this household's financial data and give 5 specific, actionable tips in English. Be direct, practical, and reference their actual numbers.
+
+FINANCIAL SNAPSHOT:
+- Monthly Income: RM${totalIncome.toLocaleString()} (Husband: RM${salary.husband}, Wife: RM${salary.wife})
+- Total Recurring Expenses: RM${totalRecurring.toLocaleString()}/mo
+- Net Worth: RM${netWorth.toLocaleString()} (Assets: RM${totalAssets.toLocaleString()}, Debts: RM${totalDebtRemaining.toLocaleString()})
+- DSR (Debt Service Ratio): ${dsr}%
+
+DEBTS:
+${debtList||'None'}
+
+ASSETS:
+${assetList||'None'}
+
+SAVINGS GOALS:
+${goalList||'None'}
+
+Respond with exactly 5 tips as a JSON array. Each tip: {"title": "short title", "body": "2-3 sentence actionable advice referencing their real numbers"}. Return ONLY the JSON array, no other text.`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const json=await res.json();
+    const raw=json.content?.map(b=>b.text||'').join('').trim();
+    const cleaned=raw.replace(/```json|```/g,'').trim();
+    const tips=JSON.parse(cleaned);
+    output.innerHTML=tips.map(t=>`<div class="tip"><strong>${t.title}</strong>${t.body}</div>`).join('');
+    staticTips.style.display='none';
+  }catch(e){
+    output.innerHTML='<div class="tip" style="border-color:#f5c6c6;background:#fdecea"><strong>Error</strong>Could not generate tips. Check your connection and try again.</div>';
+    staticTips.style.display='block';
+  }finally{
+    loading.style.display='none';
+    btn.disabled=false;btn.textContent='✨ Regenerate Tips';
+  }
+}
+
 function sw(name,btn){
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
@@ -723,6 +798,7 @@ function sw(name,btn){
   if(name==='recurring'){populateDebtDropdown();renderRecurring();}
   if(name==='savings')renderGoals();
   if(name==='wealth')renderWealth();
+  if(name==='debt')renderDebt();
 }
 </script>
 </body>

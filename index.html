@@ -175,7 +175,7 @@ input,select,button{font-family:'Plus Jakarta Sans',sans-serif;}
     </div>
     <div class="cards">
       <div class="card dark"><div class="cl">Income</div><div class="cv" id="ov-inc">—</div><div class="cs">this month</div></div>
-      <div class="card rd"><div class="cl">Expenses</div><div class="cv" id="ov-exp">—</div><div class="cs">committed</div></div>
+      <div class="card rd"><div class="cl">Total Expenses</div><div class="cv" id="ov-exp">—</div><div class="cs">committed + misc</div></div>
       <div class="card" id="ov-bal-card"><div class="cl">Balance</div><div class="cv" id="ov-bal">—</div><div class="cs">income − total</div></div>
       <div class="card am"><div class="cl">Misc</div><div class="cv" id="ov-misc">—</div><div class="cs">unplanned</div></div>
     </div>
@@ -436,12 +436,12 @@ async function addRecurring(){
   const{data,error}=await sb.from('recurring_expenses').insert({user_id:uid(),name,category,amount,debt_id}).select().single();
   if(error){alert(error.message);return;}
   recurrings.push(data);document.getElementById('rec-name').value='';document.getElementById('rec-amt').value='';
-  renderRecurring();renderOverview();
+  renderRecurring();await loadMonthData();
 }
 async function deleteRecurring(id){
   if(!confirm('Delete recurring expense?'))return;
   await sb.from('recurring_expenses').update({active:false}).eq('id',id);
-  recurrings=recurrings.filter(r=>r.id!==id);renderRecurring();renderOverview();
+  recurrings=recurrings.filter(r=>r.id!==id);renderRecurring();await loadMonthData();
 }
 
 // MONTHLY EXPENSES
@@ -470,9 +470,17 @@ async function markPaid(id){
   renderOverview();renderDebt();
 }
 
-// MISC
+async function deleteMonthlyExp(id){
+  if(!confirm('Remove this expense from this month?'))return;
+  await sb.from('monthly_expenses').delete().eq('id',id);
+  monthlyExp=monthlyExp.filter(e=>e.id!==id);
+  renderOverview();
+}
 async function loadMisc(m){
-  const{data}=await sb.from('expenses').select('*').eq('user_id',uid()).eq('type','expense').gte('date',m+'-01').lte('date',m+'-31').order('date',{ascending:false});
+  const[y,mo]=m.split('-').map(Number);
+  const lastDay=new Date(y,mo,0).getDate();
+  const end=m+'-'+String(lastDay).padStart(2,'0');
+  const{data}=await sb.from('expenses').select('*').eq('user_id',uid()).eq('type','expense').gte('date',m+'-01').lte('date',end).order('date',{ascending:false});
   miscEntries=data||[];
 }
 async function addMisc(){
@@ -545,7 +553,7 @@ async function addDebt(){
   if(error){alert(error.message);return;}
   debts.push(data);['dt-name','dt-orig','dt-rem-i','dt-mo-i','dt-rate','dt-end'].forEach(id=>document.getElementById(id).value='');
   populateDebtDropdown();
-  renderDebt();renderWealth();
+  renderDebt();renderWealth();renderOverview();
 }
 function openEditDebt(id){editDebtId=id;const d=debts.find(x=>x.id===id);document.getElementById('ed-rem').value=d.remaining_amount;document.getElementById('ed-mo').value=d.monthly_payment;openM('m-edit-debt');}
 async function confirmEditDebt(){
@@ -554,7 +562,7 @@ async function confirmEditDebt(){
   if(error){alert(error.message);return;}
   debts[debts.findIndex(d=>d.id===editDebtId)]=data;closeM('m-edit-debt');renderDebt();renderWealth();
 }
-async function deleteDebt(id){if(!confirm('Delete?'))return;await sb.from('debts').delete().eq('id',id);debts=debts.filter(d=>d.id!==id);populateDebtDropdown();renderDebt();renderWealth();}
+async function deleteDebt(id){if(!confirm('Delete?'))return;await sb.from('debts').delete().eq('id',id);debts=debts.filter(d=>d.id!==id);populateDebtDropdown();renderDebt();renderWealth();renderOverview();}
 
 // ══ RENDER ══
 
@@ -575,7 +583,7 @@ function renderOverview(){
   const balance=totalIncome-expTotal-miscTotal;
 
   document.getElementById('ov-inc').textContent=fmt(totalIncome);
-  document.getElementById('ov-exp').textContent=fmt(expTotal);
+  document.getElementById('ov-exp').textContent=fmt(expTotal+miscTotal);
   document.getElementById('ov-misc').textContent=fmt(miscTotal);
   document.getElementById('ov-bal').textContent=fmt(balance);
   document.getElementById('ov-bal-card').className='card '+(balance>=0?'gn':'rd');
@@ -604,13 +612,14 @@ function renderOverview(){
         <span class="etag">${isPaid?'Paid':r.debt_id?'Linked Debt':'Recurring'}</span>
         <span class="eamt">${fmt(r.amount)}</span>
         ${isNext?'<span></span>':isPaid?`<span class="paid-badge">&#10003; Done</span>`:`<button class="pay-btn" onclick="markPaid('${r.id}')">Mark Paid</button>`}
+        ${isNext?'':`<button class="del-btn" onclick="deleteMonthlyExp('${r.id}')">&#10005;</button>`}
       </div>`;
     }).join('')}</div>`;
   });
 
   if(!isNext&&miscEntries.length>0){
     html+=`<div class="sh"><div class="sh-left"><div class="dot" style="background:#b7950b"></div>Misc</div><div class="sh-right">${fmt(miscTotal)}</div></div>`;
-    html+=`<div class="etbl">${miscEntries.slice(0,5).map(e=>`<div class="erow"><span>${e.description}</span><span class="etag">${e.category}</span><span class="eamt">${fmt(e.amount)}</span><span></span></div>`).join('')}${miscEntries.length>5?`<div class="erow" style="color:var(--ink3);font-size:0.72rem"><span>+${miscEntries.length-5} more in Misc tab</span></div>`:''}</div>`;
+    html+=`<div class="etbl">${miscEntries.slice(0,5).map(e=>`<div class="erow"><span>${e.description} <small style="color:var(--ink3);font-size:0.7em">${e.date}</small></span><span class="etag">${e.category}</span><span class="eamt">${fmt(e.amount)}</span><button class="del-btn" onclick="deleteMisc('${e.id}')">&#10005;</button></div>`).join('')}${miscEntries.length>5?`<div class="erow" style="color:var(--ink3);font-size:0.72rem"><span>+${miscEntries.length-5} more in Misc tab</span></div>`:''}</div>`;
   }
 
   document.getElementById('ov-rows').innerHTML=html||'<div class="empty">No expenses. Add recurring expenses in the Recurring tab.</div>';

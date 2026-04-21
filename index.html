@@ -575,15 +575,15 @@ let currentUser=null,miscEntries=[],savingsGoals=[],assets=[],debts=[];
 let incomeHusband=0,incomeWife=0,miscBudget=500;
 let topupTargetId=null,editAssetId=null,editDebtId=null;
 
-const FIXED={housing:3900+365+0+2100+390+100+460+450,vehicle:1620+590,kids:860+450+250+100+333,utility:100+20+12+500+165+125+140,other:135+50+300};
-const VARIABLE={food:3000+500+70,vehicle_var:400+200};
+const FIXED={housing:0,vehicle:0,kids:0,utility:0,other:0};
+const VARIABLE={food:0,vehicle_var:0};
 const CATS=[
-  {key:'housing',label:'Housing',color:'var(--housing)',amt:FIXED.housing},
-  {key:'food',label:'Food',color:'var(--food)',amt:VARIABLE.food},
-  {key:'vehicle',label:'Vehicles',color:'var(--vehicle)',amt:FIXED.vehicle+VARIABLE.vehicle_var},
-  {key:'kids',label:'Kids & Edu',color:'var(--kids)',amt:FIXED.kids},
-  {key:'utility',label:'Utilities',color:'var(--utility)',amt:FIXED.utility},
-  {key:'other',label:'Others',color:'var(--other)',amt:FIXED.other},
+  {key:'housing',label:'Housing',color:'var(--housing)',amt:0},
+  {key:'food',label:'Food',color:'var(--food)',amt:0},
+  {key:'vehicle',label:'Vehicles',color:'var(--vehicle)',amt:0},
+  {key:'kids',label:'Kids & Edu',color:'var(--kids)',amt:0},
+  {key:'utility',label:'Utilities',color:'var(--utility)',amt:0},
+  {key:'other',label:'Others',color:'var(--other)',amt:0},
 ];
 
 function fmt(n){return'RM '+Math.round(n).toLocaleString('en-MY');}
